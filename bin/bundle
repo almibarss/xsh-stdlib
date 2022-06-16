@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+BASE="./lib"
+
+dump_function() {
+	local -r func="$1"
+	local -r file=$(find_location ${func})
+	cat <<-EOF
+
+	${func}() {
+		$(print_function_content ${func} ${file})
+	}
+
+	EOF
+}
+
+print_function_content() {
+	local -r func="$1"
+	local -r file="$2"
+	if [[ -n ${file} ]] && grep -q "^${func}\b" ${file}; then
+		#  https://stackoverflow.com/a/51280034
+		gsed -n "/^${func}\b/,/^[}]$/{/^${func}\b/{n};/^[}]$/{d};p}" ${file}
+		return
+	fi
+	echo "	# missing function"
+}
+
+find_location() {
+	local -r module="${1//::*/}"
+	local -r file="${BASE}/${module}.sh"
+	[[ -e ${file} ]] && echo ${file}
+}
+
+list_dependencies() {
+	local -r func="$1"
+	[[ " ${visited[@]} " =~ " ${func} " ]] && return
+
+	echo ${func}
+	visited+=(${func})
+
+	local -r file=$(find_location ${func})
+	[[ -n ${file} ]] || return
+
+	deps=$(print_function_content ${func} ${file} \
+		| grep -v "^[[:blank:]]*#" \
+		| gsed -n 's/\([a-z]*::[a-z_]*\)/\n<<< \1 >>>\n/p' \
+		| gsed -n 's/<<< \(.*\) >>>/\1/p')
+	for dep in $deps; do
+		list_dependencies $dep
+	done
+}
+
+print_header() {
+	echo "## START OF BUNDLE"
+	echo -n "## " && gdate --iso-8601=minutes
+}
+
+print_footer() {
+	echo "## END OF BUNDLE"
+}
+
+##? Usage: bundle <function>...
+##?
+bundle() {
+	for func in $@; do
+		list_dependencies "${func}"
+	done | while read -r dep; do dump_function ${dep}; done
+}
+
+print_header
+bundle "$@"
+print_footer
+
+# vim: set noexpandtab ts=2 ft=bash :
