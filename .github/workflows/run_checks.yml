@@ -1,0 +1,33 @@
+name: Run checks
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'lib/*.sh'
+      - 'spec/*_spec.sh'
+      - '.github/workflows/*'
+
+jobs:
+  check:
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@1.1.0
+        with:
+          ignore: spec bin
+          format: tty
+
+      - name: Install test dependencies (ShellSpec, Zsh)
+        run: |
+          sudo apt-get install zsh
+          curl -fsSL https://git.io/shellspec | sh -s 0.28.1 -b /usr/local/bin --yes
+
+      - name: Run tests
+        run: |
+          make test
